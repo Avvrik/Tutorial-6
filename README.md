@@ -5,5 +5,5 @@
 - Gas estimation
 - Balance changes
 - tx hash resolution from Neon RPC
-- 
+
 You don’t need to write your own script to submit the task—but playing with the code is highly recommended!
