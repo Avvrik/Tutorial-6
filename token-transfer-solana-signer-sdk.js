@@ -2,12 +2,15 @@ const web3 = require("@solana/web3.js");
 const { 
     getAssociatedTokenAddress,
     getAccount,
-    createApproveInstruction
+    createApproveInstruction,
+    createAssociatedTokenAccountInstruction,
+    TokenAccountNotFoundError
 } = require('@solana/spl-token');    
 const ethers = require("ethers");
 const bs58 = require("bs58");
 const { NeonProxyRpcApi, createBalanceAccountInstruction } = require("@neonevm/solana-sign");
 require("dotenv").config();
+
 
 const NEON_RPC = 'https://devnet.neonevm.org/sol';
 const connection = new web3.Connection('https://api.devnet.solana.com', 'confirmed');
@@ -22,7 +25,7 @@ const USDC = new ethers.Contract(
     proxyApi
 );
 
-const solanaPrivateKey = bs58.default.decode(process.env.PRIVATE_KEY_SOLANA);
+const solanaPrivateKey = bs58.decode(process.env.PRIVATE_KEY_SOLANA);
 const keypair = web3.Keypair.fromSecretKey(solanaPrivateKey);
 
 async function init() {
@@ -39,14 +42,37 @@ async function init() {
     const usdcTokenMint = await USDC.tokenMint();
     const usdcContractPDA = calculateContractAccount(USDC_ADDRESS, new web3.PublicKey(NEON_EVM_PROGRAM))[0];
     const receiver = ethers.Wallet.createRandom();
-
-    const solanaUserUSDC_ATA = await getAssociatedTokenAddress(
-        new web3.PublicKey(ethers.encodeBase58(usdcTokenMint)),
-        solanaUser.publicKey,
-        true
-    );
-    const ataInfo = await getAccount(connection, solanaUserUSDC_ATA);
     
+    const solanaUserUSDC_ATA = await getAssociatedTokenAddress(
+    new web3.PublicKey(ethers.encodeBase58(usdcTokenMint)),
+    solanaUser.publicKey,
+    true
+    );
+
+    let ataInfo;
+    try {
+        ataInfo = await getAccount(connection, solanaUserUSDC_ATA);
+    } catch (e) {
+        if (e instanceof TokenAccountNotFoundError) {
+            console.log('Creating missing USDC ATA...');
+            const ataIx = createAssociatedTokenAccountInstruction(
+                keypair.publicKey,             // payer
+                solanaUserUSDC_ATA,            // associated token address to create
+                keypair.publicKey,             // owner
+                new web3.PublicKey(ethers.encodeBase58(usdcTokenMint)) // USDC mint
+            );
+            const ataTx = new web3.Transaction().add(ataIx);
+            const signature = await connection.sendTransaction(ataTx, [keypair]);
+            await connection.confirmTransaction(signature, 'confirmed');
+            console.log('ATA created:', signature);
+
+            ataInfo = await getAccount(connection, solanaUserUSDC_ATA); // retry after creation
+        } else {
+            throw e;
+        }
+    }
+
+
     const senderUsdcBalance = ataInfo.amount;
     if (senderUsdcBalance == 0) {
         console.error('\nPlease add some USDC to', solanaUser.publicKey.toBase58());
@@ -74,8 +100,11 @@ async function init() {
         nonce
     });
 
+    console.log(ataInfo.delegate)
+    console.log(usdcContractPDA)
+
     // if delegate has not be given from solanaUser's USDC ATA to the PDA Contract of USDC then also include approval instruction
-    if (ataInfo.delegate.toBase58() != usdcContractPDA.toBase58() || ataInfo.delegatedAmount == 0) {
+    if (ataInfo.delegate == null || ataInfo.delegate.toBase58() != usdcContractPDA.toBase58() || ataInfo.delegatedAmount == 0) {
         console.log('Add approval instruction');
         scheduledTransaction.instructions.unshift(
             createApproveInstruction(
@@ -91,7 +120,7 @@ async function init() {
     const account = await connection.getAccountInfo(solanaUser.balanceAddress);
     if (account === null) {
         const { neonEvmProgram, publicKey, neonWallet, chainId } = solanaUser;
-        scheduledTransaction.instructions.unshift(createBalanceAccountInstruction(neonEvmProgram, publicKey, neonWallet, chainId));
+        scheduledTransaction.instructions.unshift(createBalanceAccountInstruction(neonEvmProgram, solanaUser.publicKey, solanaUser.neonWallet, chainId));
     }
 
     const { blockhash } = await connection.getLatestBlockhash();

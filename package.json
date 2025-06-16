@@ -12,9 +12,13 @@
     "dependencies": {
         "@neonevm/solana-sign": "^0.2.1",
         "@solana/spl-token": "^0.4.13",
-        "@solana/web3.js": "^1.87.2",
-        "bs58": "^6.0.0",
-        "dotenv": "^16.3.1",
+        "@solana/web3.js": "^1.98.2",
+        "bs58": "^5.0.0",
+        "dotenv": "^16.5.0",
         "ethers": "^6.12.1"
+    },
+    "devDependencies": {
+        "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+        "hardhat": "^2.24.2"
     }
 }
