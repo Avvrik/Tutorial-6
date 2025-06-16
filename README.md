@@ -10,7 +10,7 @@ You don’t need to write your own script to submit the task—but playing with 
 
 Once done, push your scripts to GitHub and submit the repo link including a README with your observations about how approval and transfer work with Solana Native SDK.
 
-Keep in mind that spending from Solana ATA balance requires initializing the balance account:
+## Keep in mind that spending from Solana ATA balance requires initializing the balance account:
 
 To be able to spend the token balance held on a Solana SPL associated token account (ATA) via the corresponding ERC20ForSPL smart contract deployed on NeonEVM, the native Solana user who owns that ATA must have done the following:
 
